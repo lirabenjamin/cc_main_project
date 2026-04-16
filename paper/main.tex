@@ -1,0 +1,107 @@
+\documentclass[12pt]{article}
+
+% ── Packages ─────────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{natbib}
+
+\doublespacing
+
+% ── Load auto-generated numbers ─────────────────────────────────────────────
+\input{../output/numbers/results.tex}
+
+% ── Title ────────────────────────────────────────────────────────────────────
+\title{AI Improves Creative Output but Undermines Process Ownership}
+\author{Benjamin Lira Luttges}
+\date{}
+
+\begin{document}
+\maketitle
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Methods}
+% ══════════════════════════════════════════════════════════════════════════════
+
+\subsection{Participants}
+
+We randomly assigned \NTotal{} participants to write a caption for a \textit{New Yorker}-style cartoon either alone (solo; $n$ = \NSolo) or with access to an AI writing tool (AI; $n$ = \NAI). We recruited \NProlific{} participants from Prolific and \NConnect{} from CloudResearch Connect.
+
+\begin{table}[t]
+  \centering
+  \caption{Sample by condition and recruitment platform.}
+  \label{tab:sample}
+  \input{../output/tables/tab_sample.tex}
+\end{table}
+
+All participants passed the honeypot bot check. Automated moderation flagged \NFlagged{} captions, which we retained (excluding them does not change results). \NMissingSurvey{} participants (\PctMissingSurvey) completed the caption task but not the post-task survey; this missingness did not differ by condition ($\chi^2(1)$ = \MissChiSq, $p$ \MissChiP).
+
+\subsection{Procedure}
+
+Each participant viewed a cartoon and wrote the funniest caption they could. Solo participants wrote unaided. AI participants could request AI-generated caption ideas, which they did an average of \AIUsesMean{} times ($SD$ = \AIUsesSD).
+
+After submitting their caption, participants rated their experience on four sets of 0--10 scales: process agency (3 items: ``I felt like I was producing the work,'' ``I felt responsible for the output,'' ``I felt involved in the process''), outcome agency (3 items: ``How capably/effectively/powerfully did you produce a funny caption?''), meaning (3 items: fulfilling, meaningful, mattered), and humor identity (3 items: funny, importance, reflects).
+
+\subsection{Measures}
+
+Three independent methods assessed caption quality: (1) Elo ratings from pairwise votes by other participants, (2) a pretrained humor model (0--100), and (3) LLM judge ratings on humor, cleverness, fit, and overall quality (each 1--10).
+
+Task behavior measures included total keystrokes, task duration (seconds), and number of AI uses.
+
+We computed survey composites as the mean of each scale's items. All four composites showed acceptable internal consistency.
+
+% ══════════════════════════════════════════════════════════════════════════════
+\section{Results}
+% ══════════════════════════════════════════════════════════════════════════════
+
+Table~\ref{tab:condition} reports condition differences across all dependent variables.
+
+\begin{table}[t]
+  \centering
+  \caption{Condition differences (solo vs.\ AI). Effect sizes are Cohen's $d$; positive $d$ indicates solo scored higher.}
+  \label{tab:condition}
+  \input{../output/tables/tab_condition_tests.tex}
+\end{table}
+
+\subsection{AI participants wrote funnier captions}
+
+AI-assisted captions earned higher Elo ratings from peer voting ($M_{\text{AI}}$ = \EloMeanAI{} vs.\ $M_{\text{Solo}}$ = \EloMeanSolo; $t$(\EloDF) = \EloT, $p$ \EloP, $d$ = \EloD) and higher cleverness ratings from LLM judges ($t$(\LLMCleverDF) = \LLMCleverT, $p$ \LLMCleverP, $d$ = \LLMCleverD). Humor, fit, and overall quality differences did not reach significance.
+
+\subsection{AI did not reduce effort}
+
+AI participants typed just as much and spent just as long on the task as solo participants (keystrokes: $t$(\KeystrokesDF) = \KeystrokesT, $p$ \KeystrokesP; duration: $t$(\DurationDF) = \DurationT, $p$ \DurationP). AI participants used the tool an average of \AIUsesMean{} times, but this supplemented rather than replaced their own writing effort.
+
+\subsection{AI sharply reduced process agency}
+
+AI participants felt far less ownership over the creative process ($M_{\text{AI}}$ = \ProcAgencyMeanAI{} vs.\ $M_{\text{Solo}}$ = \ProcAgencyMeanSolo; $t$(\ProcAgencyDF) = \ProcAgencyT, $p$ \ProcAgencyP, $d$ = \ProcAgencyD). On a 0--10 scale, solo participants averaged nearly 9; AI participants averaged just above 6. They felt less like they were producing the work, less responsible for the output, and less involved in the process.
+
+\subsection{Yet outcome agency did not budge}
+
+Outcome agency held flat across conditions ($M_{\text{AI}}$ = \OutAgencyMeanAI{} vs.\ $M_{\text{Solo}}$ = \OutAgencyMeanSolo; $t$(\OutAgencyDF) = \OutAgencyT, $p$ \OutAgencyP, $d$ = \OutAgencyD). AI participants produced objectively better captions, but did not feel more capable, effective, or powerful. They did not internalize the AI's contribution as their own.
+
+\subsection{Meaning and identity were unaffected}
+
+Neither meaning ($d$ = \MeaningD, $p$ \MeaningP) nor humor identity ($d$ = \IdentityD, $p$ \IdentityP) differed by condition, though meaning trended lower among AI participants.
+
+% ── Figures ──────────────────────────────────────────────────────────────────
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{../output/figures/fig_composites.pdf}
+  \caption{Survey composites by condition. Error bars represent $\pm$1 SE.}
+  \label{fig:composites}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{../output/figures/fig_quality.pdf}
+  \caption{Caption quality by condition. Error bars represent $\pm$1 SE.}
+  \label{fig:quality}
+\end{figure}
+
+\end{document}

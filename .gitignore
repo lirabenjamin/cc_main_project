@@ -1,0 +1,17 @@
+.env
+__pycache__/
+
+# LaTeX auxiliary files
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.pdf
+paper/*.synctex.gz
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.bbl
+paper/*.blg
+
+# Quarto render artifacts
+*_files/
+*.knit.md

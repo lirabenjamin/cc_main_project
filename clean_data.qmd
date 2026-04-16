@@ -1,0 +1,362 @@
+---
+title: "Caption Contest — Data Cleaning & Codebook"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(tidyverse)
+library(psych)
+library(knitr)
+library(kableExtra)
+```
+
+# 1. Codebook
+
+## 1.1 Overview
+
+This document cleans raw data from the Caption Contest study (studies: `prolific3`, `connect1`). The final dataset has **one row per participant** with the submission, all survey phases, and derived variables merged together.
+
+**Source collections** (MongoDB `cartoons` database):
+
+- `submissions` — one row per caption submission
+- `surveys` — one row per survey phase per participant (up to 3 phases)
+- `votes` — pairwise comparisons used for Elo ratings (pre-computed; not merged here)
+
+**Raw data files** (created by `download_raw_data.R`):
+
+- `raw_submissions.rds` (N = 182)
+- `raw_surveys.rds` (N = 460 rows; 154 unique participants)
+- `raw_votes.rds` (N = 14,382)
+
+## 1.2 Variable Definitions
+
+```{r codebook-table}
+codebook <- tribble(
+  ~variable,              ~type,      ~values,                         ~description,
+  # ── Identifiers ──
+  "submission_id",        "character", "MongoDB ObjectId string",      "Unique submission identifier (primary key)",
+  "prolific_pid",         "character", "Prolific participant ID",      "Participant identifier from Prolific",
+  "study",                "factor",    "prolific3, connect1",          "Study wave / recruitment platform",
+  "condition",            "factor",    "solo, ai",                     "Experimental condition: solo (no AI) vs. ai (AI available, originally 'many-noprompt')",
+
+  # ── Task behavior ──
+  "caption",              "character", "Free text",                    "Participant's submitted caption",
+  "n_keystrokes",         "integer",   "0–642",                        "Total keystrokes recorded during caption writing",
+  "n_ai_uses",            "integer",   "0–20 (0 for solo)",            "Number of times participant requested AI assistance",
+  "ai_used",              "logical",   "TRUE/FALSE",                   "Whether participant used AI at least once (always FALSE for solo)",
+  "n_tab_leaves",         "integer",   "0+",                           "Number of times participant left the browser tab",
+  "task_duration_s",      "numeric",   "13–968",                       "Total time on task in seconds (from botTimingMs / 1000)",
+
+  # ── Caption quality ──
+  "elo",                  "numeric",   "1268–1747",                    "Elo rating from pairwise voting (higher = funnier)",
+  "vote_count",           "integer",   "0–58",                         "Number of pairwise votes this caption received",
+  "pretrained_score",     "integer",   "7–99",                         "Score from pretrained humor model (0–100 scale)",
+  "llm_humor",            "integer",   "1–10",                         "LLM judge: humor rating",
+  "llm_cleverness",       "integer",   "1–10",                         "LLM judge: cleverness rating",
+  "llm_fit",              "integer",   "1–10",                         "LLM judge: fit-to-cartoon rating",
+  "llm_overall",          "integer",   "1–10",                         "LLM judge: overall quality rating",
+  "llm_comment",          "character", "Free text",                    "LLM judge: qualitative comment",
+
+  # ── Feedback condition ──
+  "feedback_type",        "factor",    "honest_coarsened, none",       "Whether participant received feedback (honest_coarsened) or not (none)",
+  "top_half",             "logical",   "TRUE/FALSE/NA",                "Whether caption was in top half (feedback conditions only; NA if no feedback)",
+  "real_percentile",      "integer",   "1–72",                         "Actual percentile rank of the caption",
+
+  # ── Data quality ──
+  "honeypot_clean",       "logical",   "TRUE/FALSE",                   "Honeypot field was empty (TRUE = passed bot check)",
+  "moderation_flagged",   "logical",   "TRUE/FALSE",                   "Whether caption was flagged by moderation",
+
+  # ── Survey: Process Agency (identity_process phase) ──
+  "process_producing",    "integer",   "0–10",                         "'I felt like I was producing the work'",
+  "process_responsible",  "integer",   "0–10",                         "'I felt responsible for the output'",
+  "process_involved",     "integer",   "0–10",                         "'I felt involved in the process'",
+  "process_satisfaction", "integer",   "0–10",                         "'I felt satisfied with the process'",
+
+  # ── Survey: Identity (identity_process phase) ──
+  "identity_funny",       "integer",   "0–10",                         "'I see myself as a funny person'",
+  "identity_importance",  "integer",   "0–10",                         "'Being funny is important to me'",
+  "identity_reflects",    "integer",   "0–10",                         "'This caption reflects who I am'",
+  "attention_check",      "integer",   "0–10",                         "Attention check item",
+
+  # ── Survey: Outcome Agency (outcome_meaning phase) ──
+  "outcome_capable",      "integer",   "0–10",                         "'How capably did you produce a funny caption?'",
+  "outcome_effective",    "integer",   "0–10",                         "'How effectively did you produce a funny caption?'",
+  "outcome_power",        "integer",   "0–10",                         "'How powerfully did you produce a funny caption?'",
+
+  # ── Survey: Meaning (outcome_meaning phase) ──
+  "meaning_fulfilling",   "integer",   "0–10",                         "'The experience was fulfilling'",
+  "meaning_meaningful",   "integer",   "0–10",                         "'The experience was meaningful'",
+  "meaning_mattered",     "integer",   "0–10",                         "'The experience mattered'",
+
+  # ── Survey: Open-ended (open_ended phase) ──
+  "experience",           "character", "Free text",                    "Open-ended: describe your experience",
+  "feedback_text",        "character", "Free text",                    "Open-ended: any feedback on the study",
+
+  # ── Composites ──
+  "process_agency",       "numeric",   "0–10 (mean)",                  "Mean of process_producing, process_responsible, process_involved",
+  "outcome_agency",       "numeric",   "0–10 (mean)",                  "Mean of outcome_capable, outcome_effective, outcome_power",
+  "meaning",              "numeric",   "0–10 (mean)",                  "Mean of meaning_fulfilling, meaning_meaningful, meaning_mattered",
+  "identity",             "numeric",   "0–10 (mean)",                  "Mean of identity_funny, identity_importance, identity_reflects"
+)
+
+codebook |>
+  kable(col.names = c("Variable", "Type", "Values", "Description")) |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, font_size = 12) |>
+  pack_rows("Identifiers", 1, 4) |>
+  pack_rows("Task Behavior", 5, 10) |>
+  pack_rows("Caption Quality", 11, 17) |>
+  pack_rows("Feedback Condition", 18, 20) |>
+  pack_rows("Data Quality", 21, 22) |>
+  pack_rows("Survey: Process Agency", 23, 26) |>
+  pack_rows("Survey: Identity", 27, 30) |>
+  pack_rows("Survey: Outcome Agency", 31, 33) |>
+  pack_rows("Survey: Meaning", 34, 36) |>
+  pack_rows("Survey: Open-Ended", 37, 38) |>
+  pack_rows("Composites", 39, 42)
+```
+
+# 2. Load Raw Data
+
+```{r load-raw}
+sub_raw <- readRDS("raw_submissions.rds")
+sur_raw <- readRDS("raw_surveys.rds")
+```
+
+**Raw counts:** `r nrow(sub_raw)` submissions, `r nrow(sur_raw)` survey rows (`r length(unique(sur_raw$submission_id_str))` unique participants).
+
+# 3. Clean Submissions
+
+```{r clean-submissions}
+sub <- sub_raw |>
+  transmute(
+    submission_id     = submission_id,
+    prolific_pid      = prolificPid,
+    study             = factor(study, levels = c("prolific3", "connect1")),
+    condition         = factor(
+      if_else(condition == "many-noprompt", "ai", condition),
+      levels = c("solo", "ai")
+    ),
+    caption           = caption,
+    n_keystrokes      = as.integer(n_keystrokes),
+    n_ai_uses         = as.integer(n_ai_interactions),
+    ai_used           = n_ai_interactions > 0,
+    n_tab_leaves      = as.integer(n_tab_leaves),
+    task_duration_s   = botTimingMs / 1000,
+    elo               = elo,
+    vote_count        = as.integer(voteCount),
+    pretrained_score  = as.integer(pretrainedScore),
+    llm_humor         = llmScores$humor,
+    llm_cleverness    = llmScores$cleverness,
+    llm_fit           = llmScores$fit,
+    llm_overall       = llmScores$overall,
+    llm_comment       = llmScores$comment,
+    feedback_type     = factor(
+      if_else(is.na(feedbackType), "none", feedbackType),
+      levels = c("none", "honest_coarsened")
+    ),
+    top_half          = topHalf,
+    real_percentile   = as.integer(realPercentile),
+    honeypot_clean    = (honeypotValue == ""),
+    moderation_flagged = moderation$flagged
+  )
+
+cat(sprintf("Submissions cleaned: %d rows, %d columns\n", nrow(sub), ncol(sub)))
+```
+
+# 4. Clean & Pivot Surveys
+
+Each participant has up to 3 survey phases. We pivot the ratings from each phase into a single wide row per participant.
+
+```{r clean-surveys}
+# ── identity_process phase ───────────────────────────────────────────────────
+sur_identity <- sur_raw |>
+  filter(phase == "identity_process") |>
+  transmute(
+    submission_id      = submission_id_str,
+    process_producing  = ratings$process_producing,
+    process_responsible = ratings$process_responsible,
+    process_involved   = ratings$process_involved,
+    process_satisfaction = ratings$process_satisfaction,
+    identity_funny     = ratings$identity_funny,
+    identity_importance = ratings$identity_importance,
+    identity_reflects  = ratings$identity_reflects,
+    attention_check    = ratings$attention_check
+  )
+
+# ── outcome_meaning phase ────────────────────────────────────────────────────
+sur_outcome <- sur_raw |>
+  filter(phase == "outcome_meaning") |>
+  transmute(
+    submission_id      = submission_id_str,
+    outcome_capable    = ratings$outcome_capable_v2,
+    outcome_effective  = ratings$outcome_effective_v2,
+    outcome_power      = ratings$outcome_power_v2,
+    meaning_fulfilling = ratings$meaning_fulfilling,
+    meaning_meaningful = ratings$meaning_meaningful,
+    meaning_mattered   = ratings$meaning_mattered
+  )
+
+# ── open_ended phase ─────────────────────────────────────────────────────────
+sur_open <- sur_raw |>
+  filter(phase == "open_ended") |>
+  transmute(
+    submission_id = submission_id_str,
+    experience    = ratings$experience,
+    feedback_text = ratings$feedback
+  )
+
+# Handle duplicates (2 people have duplicate open_ended phases) — keep first
+sur_open <- sur_open |> distinct(submission_id, .keep_all = TRUE)
+
+cat(sprintf("Survey phases: identity_process=%d, outcome_meaning=%d, open_ended=%d\n",
+            nrow(sur_identity), nrow(sur_outcome), nrow(sur_open)))
+```
+
+# 5. Merge to One Row per Person
+
+```{r merge}
+df <- sub |>
+  left_join(sur_identity, by = "submission_id") |>
+  left_join(sur_outcome,  by = "submission_id") |>
+  left_join(sur_open,     by = "submission_id")
+
+cat(sprintf("Merged dataset: %d rows × %d columns\n", nrow(df), ncol(df)))
+cat(sprintf("Participants with survey data: %d / %d (%.0f%%)\n",
+            sum(!is.na(df$process_producing)), nrow(df),
+            100 * mean(!is.na(df$process_producing))))
+```
+
+# 6. Composites & Reliability
+
+## 6.1 Process Agency
+
+Items: `process_producing`, `process_responsible`, `process_involved`
+
+```{r alpha-process}
+process_items <- df |> select(process_producing, process_responsible, process_involved) |> drop_na()
+alpha_process <- psych::alpha(process_items, check.keys = FALSE)
+cat(sprintf("Cronbach's α = %.2f (N = %d)\n", alpha_process$total$raw_alpha, nrow(process_items)))
+alpha_process$total |> kable(digits = 3) |> kable_styling(full_width = FALSE)
+```
+
+```{r composite-process}
+df <- df |>
+  rowwise() |>
+  mutate(process_agency = mean(c(process_producing, process_responsible, process_involved), na.rm = FALSE)) |>
+  ungroup()
+```
+
+## 6.2 Outcome Agency
+
+Items: `outcome_capable`, `outcome_effective`, `outcome_power`
+
+```{r alpha-outcome}
+outcome_items <- df |> select(outcome_capable, outcome_effective, outcome_power) |> drop_na()
+alpha_outcome <- psych::alpha(outcome_items, check.keys = FALSE)
+cat(sprintf("Cronbach's α = %.2f (N = %d)\n", alpha_outcome$total$raw_alpha, nrow(outcome_items)))
+alpha_outcome$total |> kable(digits = 3) |> kable_styling(full_width = FALSE)
+```
+
+```{r composite-outcome}
+df <- df |>
+  rowwise() |>
+  mutate(outcome_agency = mean(c(outcome_capable, outcome_effective, outcome_power), na.rm = FALSE)) |>
+  ungroup()
+```
+
+## 6.3 Meaning
+
+Items: `meaning_fulfilling`, `meaning_meaningful`, `meaning_mattered`
+
+```{r alpha-meaning}
+meaning_items <- df |> select(meaning_fulfilling, meaning_meaningful, meaning_mattered) |> drop_na()
+alpha_meaning <- psych::alpha(meaning_items, check.keys = FALSE)
+cat(sprintf("Cronbach's α = %.2f (N = %d)\n", alpha_meaning$total$raw_alpha, nrow(meaning_items)))
+alpha_meaning$total |> kable(digits = 3) |> kable_styling(full_width = FALSE)
+```
+
+```{r composite-meaning}
+df <- df |>
+  rowwise() |>
+  mutate(meaning = mean(c(meaning_fulfilling, meaning_meaningful, meaning_mattered), na.rm = FALSE)) |>
+  ungroup()
+```
+
+## 6.4 Identity
+
+Items: `identity_funny`, `identity_importance`, `identity_reflects`
+
+```{r alpha-identity}
+identity_items <- df |> select(identity_funny, identity_importance, identity_reflects) |> drop_na()
+alpha_identity <- psych::alpha(identity_items, check.keys = FALSE)
+cat(sprintf("Cronbach's α = %.2f (N = %d)\n", alpha_identity$total$raw_alpha, nrow(identity_items)))
+alpha_identity$total |> kable(digits = 3) |> kable_styling(full_width = FALSE)
+```
+
+```{r composite-identity}
+df <- df |>
+  rowwise() |>
+  mutate(identity = mean(c(identity_funny, identity_importance, identity_reflects), na.rm = FALSE)) |>
+  ungroup()
+```
+
+## 6.5 Reliability Summary
+
+```{r alpha-summary}
+tibble(
+  Composite = c("Process Agency", "Outcome Agency", "Meaning", "Identity"),
+  Items = c("producing, responsible, involved",
+            "capable, effective, power",
+            "fulfilling, meaningful, mattered",
+            "funny, importance, reflects"),
+  N = c(nrow(process_items), nrow(outcome_items), nrow(meaning_items), nrow(identity_items)),
+  Alpha = c(alpha_process$total$raw_alpha,
+            alpha_outcome$total$raw_alpha,
+            alpha_meaning$total$raw_alpha,
+            alpha_identity$total$raw_alpha)
+) |>
+  mutate(Alpha = sprintf("%.2f", Alpha)) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# 7. Final Dataset Summary
+
+```{r summary}
+cat(sprintf("Final dataset: %d participants × %d variables\n", nrow(df), ncol(df)))
+cat(sprintf("\nCondition breakdown:\n"))
+df |> count(condition, study) |> kable() |> kable_styling(full_width = FALSE)
+```
+
+```{r descriptives}
+df |>
+  select(where(is.numeric), -matches("^llm_|attention_check|real_percentile")) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "value") |>
+  group_by(variable) |>
+  summarise(
+    n = sum(!is.na(value)),
+    mean = mean(value, na.rm = TRUE),
+    sd = sd(value, na.rm = TRUE),
+    min = min(value, na.rm = TRUE),
+    max = max(value, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(across(where(is.numeric), \(x) round(x, 2))) |>
+  kable() |>
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+```
+
+# 8. Export
+
+```{r export}
+write_csv(df, "data_clean.csv")
+cat(sprintf("Wrote data_clean.csv: %d rows × %d columns\n", nrow(df), ncol(df)))
+```
